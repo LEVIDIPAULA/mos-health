@@ -1,0 +1,182 @@
+using System;
+using System.Diagnostics;
+using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
+using BepInEx;
+using BepInEx.Logging;
+using GameNetcodeStuff;
+using HarmonyLib;
+using TMPro;
+using Unity.Netcode;
+using UnityEngine;
+using UnityEngine.UI;
+
+[assembly: CompilationRelaxations(8)]
+[assembly: RuntimeCompatibility(WrapNonExceptionThrows = true)]
+[assembly: Debuggable(DebuggableAttribute.DebuggingModes.IgnoreSymbolStoreSequencePoints)]
+[assembly: AssemblyTitle("HealthMetrics")]
+[assembly: AssemblyDescription("")]
+[assembly: AssemblyConfiguration("")]
+[assembly: AssemblyCompany("")]
+[assembly: AssemblyProduct("HealthMetrics")]
+[assembly: AssemblyCopyright("Copyright ©  2023")]
+[assembly: AssemblyTrademark("")]
+[assembly: ComVisible(false)]
+[assembly: Guid("eba7b111-51e5-4353-807d-1268e6290901")]
+[assembly: AssemblyFileVersion("1.0.0.0")]
+[assembly: TargetFramework(".NETFramework,Version=v4.8", FrameworkDisplayName = ".NET Framework 4.8")]
+[assembly: AssemblyVersion("1.0.0.0")]
+namespace HealthMetrics
+{
+	[BepInPlugin("Matsuura.HealthMetrics", "HealthMetrics", "1.0.0")]
+	public class HealthMetricsBase : BaseUnityPlugin
+	{
+		private const string modGUID = "Matsuura.HealthMetrics";
+
+		private const string modName = "HealthMetrics";
+
+		private const string modVersion = "1.0.0";
+
+		private readonly Harmony _harmony = new Harmony("Matsuura.HealthMetrics");
+
+		private static HealthMetricsBase _instance;
+
+		private static ManualLogSource _logSource;
+
+		internal void Awake()
+		{
+			if ((Object)(object)_instance == (Object)null)
+			{
+				_instance = this;
+			}
+			if (_logSource == null)
+			{
+				_logSource = Logger.CreateLogSource("Matsuura.HealthMetrics");
+			}
+			_harmony.PatchAll();
+			_logSource.LogInfo((object)"HealthMetrics Awake");
+		}
+
+		internal static void Log(string message)
+		{
+			if (_logSource != null)
+			{
+				_logSource.LogInfo((object)message);
+			}
+		}
+
+		internal static void LogD(string message)
+		{
+			if (_logSource != null)
+			{
+				_logSource.LogDebug((object)message);
+			}
+		}
+	}
+}
+namespace HealthMetrics.Patches
+{
+	[HarmonyPatch(typeof(HUDManager))]
+	internal class HealthHUDPatches
+	{
+		private static TextMeshProUGUI _healthText;
+
+		private static readonly string DefaultValueHealthText = " ¤";
+
+		public static int _oldValuehealthValueForUpdater = 0;
+
+		public static int _healthValueForUpdater = 100;
+
+		private static readonly Color _healthyColor = Color32.op_Implicit(new Color32((byte)0, byte.MaxValue, (byte)0, byte.MaxValue));
+
+		private static readonly Color _criticalHealthColor = Color32.op_Implicit(new Color32(byte.MaxValue, (byte)0, (byte)0, byte.MaxValue));
+
+		[HarmonyPatch("Start")]
+		[HarmonyPostfix]
+		private static void Start(ref HUDManager __instance)
+		{
+			//IL_0005: Unknown result type (might be due to invalid IL or missing references)
+			//IL_000a: Unknown result type (might be due to invalid IL or missing references)
+			//IL_0039: Unknown result type (might be due to invalid IL or missing references)
+			//IL_006e: Unknown result type (might be due to invalid IL or missing references)
+			GameObject val = new GameObject("HealthHUDDisplay");
+			val.AddComponent<RectTransform>();
+			TextMeshProUGUI obj = val.AddComponent<TextMeshProUGUI>();
+			RectTransform rectTransform = ((TMP_Text)obj).rectTransform;
+			((Transform)rectTransform).SetParent(((Component)__instance.PTTIcon).transform, false);
+			rectTransform.anchoredPosition = new Vector2(8f, -57f);
+			((TMP_Text)obj).font = ((TMP_Text)__instance.controlTipLines[0]).font;
+			((TMP_Text)obj).fontSize = 16f;
+			((TMP_Text)obj).text = "100";
+			((Graphic)obj).color = _healthyColor;
+			((TMP_Text)obj).overflowMode = (TextOverflowModes)0;
+			((Behaviour)obj).enabled = true;
+			_healthText = obj;
+		}
+
+		[HarmonyPatch("Update")]
+		[HarmonyPostfix]
+		private static void Update()
+		{
+			//IL_007d: Unknown result type (might be due to invalid IL or missing references)
+			//IL_0082: Unknown result type (might be due to invalid IL or missing references)
+			//IL_0088: Unknown result type (might be due to invalid IL or missing references)
+			if ((Object)(object)_healthText != (Object)null && _healthValueForUpdater != _oldValuehealthValueForUpdater)
+			{
+				_oldValuehealthValueForUpdater = _healthValueForUpdater;
+				if (_healthValueForUpdater > 0)
+				{
+					((TMP_Text)_healthText).text = _healthValueForUpdater.ToString().PadLeft((_healthValueForUpdater < 10) ? 2 : 3, ' ');
+				}
+				else
+				{
+					((TMP_Text)_healthText).text = DefaultValueHealthText;
+				}
+				double percentage = (double)_healthValueForUpdater / 100.0;
+				((Graphic)_healthText).color = ColorInterpolation(_criticalHealthColor, _healthyColor, percentage);
+			}
+		}
+
+		public static int LinearInterpolation(int start, int end, double percentage)
+		{
+			return start + (int)Math.Round(percentage * (double)(end - start));
+		}
+
+		public static Color ColorInterpolation(Color start, Color end, double percentage)
+		{
+			//IL_0000: Unknown result type (might be due to invalid IL or missing references)
+			//IL_000b: Unknown result type (might be due to invalid IL or missing references)
+			//IL_0021: Unknown result type (might be due to invalid IL or missing references)
+			//IL_002c: Unknown result type (might be due to invalid IL or missing references)
+			//IL_0042: Unknown result type (might be due to invalid IL or missing references)
+			//IL_004d: Unknown result type (might be due to invalid IL or missing references)
+			//IL_006a: Unknown result type (might be due to invalid IL or missing references)
+			return new Color(hexToFloat(LinearInterpolation(floatToHex(start.r), floatToHex(end.r), percentage)), hexToFloat(LinearInterpolation(floatToHex(start.g), floatToHex(end.g), percentage)), hexToFloat(LinearInterpolation(floatToHex(start.b), floatToHex((int)end.b), percentage)), 1f);
+		}
+
+		public static float hexToFloat(int hex)
+		{
+			return (float)hex / 255f;
+		}
+
+		public static int floatToHex(float f)
+		{
+			return (int)f * 255;
+		}
+	}
+	[HarmonyPatch(typeof(PlayerControllerB))]
+	internal class PlayerPatches
+	{
+		[HarmonyPrefix]
+		[HarmonyPatch("LateUpdate")]
+		private static void LateUpdate_Prefix(PlayerControllerB __instance)
+		{
+			if (((NetworkBehaviour)__instance).IsOwner && (!((NetworkBehaviour)__instance).IsServer || __instance.isHostPlayerObject))
+			{
+				HealthHUDPatches._healthValueForUpdater = ((__instance.health >= 0) ? __instance.health : 0);
+			}
+		}
+	}
+}
